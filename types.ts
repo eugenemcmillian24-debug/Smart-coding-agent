@@ -14,6 +14,9 @@ export interface Config {
   fix_threshold?: number;
   deployment_targets?: string[];
   scheduled_run?: ScheduledRunConfig;
+  sandbox_mode?: 'mock' | 'real';
+  branch_name?: string;
+  create_pr?: boolean;
 }
 
 export interface ExecutionEnvironment {
@@ -47,6 +50,21 @@ export interface RequirementsDoc {
   extracted_specs?: string[];
 }
 
+export interface RepoImport {
+  url: string;
+  branch?: string;
+  analyzed?: boolean;
+  patterns?: string[];
+  conventions?: string[];
+  dependencies?: string[];
+}
+
+export interface SecretEnv {
+  key: string;
+  value: string;
+  encrypted?: boolean;
+}
+
 export interface CodingTask {
   task_description: string;
   target_stack: string;
@@ -55,6 +73,8 @@ export interface CodingTask {
   config: Config;
   database_schema?: DatabaseSchema;
   requirements_doc?: RequirementsDoc;
+  repo_import?: RepoImport;
+  secrets?: SecretEnv[];
 }
 
 export interface SourceFile {
@@ -88,6 +108,73 @@ export interface ExecutionResults {
   duration_ms: number;
   exit_code?: number;
   artifacts?: string[];
+  stdout?: string;
+  stderr?: string;
+  test_results?: TestResult[];
+  coverage_report?: CoverageReport;
+}
+
+export interface TestResult {
+  name: string;
+  passed: boolean;
+  duration_ms: number;
+  error?: string;
+}
+
+export interface CoverageReport {
+  lines: number;
+  branches: number;
+  functions: number;
+  statements: number;
+}
+
+export interface SandboxExecution {
+  status: 'idle' | 'running' | 'success' | 'failed';
+  started_at?: string;
+  finished_at?: string;
+  container_id?: string;
+  output?: string;
+  error?: string;
+  artifacts?: string[];
+}
+
+export interface ApiEndpoint {
+  method: string;
+  path: string;
+  handler?: string;
+  file?: string;
+  line?: number;
+}
+
+export interface ApiTest {
+  id: string;
+  endpoint: ApiEndpoint;
+  request_body?: string;
+  headers?: Record<string, string>;
+  expected_status?: number;
+  status: 'idle' | 'running' | 'pass' | 'fail';
+  response?: string;
+  response_status?: number;
+  response_time_ms?: number;
+  error?: string;
+}
+
+export interface ArchitectureDiagram {
+  mermaid_code: string;
+  services: string[];
+  databases: string[];
+  external_apis: string[];
+}
+
+export interface BenchmarkResult {
+  name: string;
+  requests_per_second: number;
+  avg_latency_ms: number;
+  p50_latency_ms: number;
+  p95_latency_ms: number;
+  p99_latency_ms: number;
+  error_rate: number;
+  duration_seconds: number;
 }
 
 export interface DeploymentTarget {
@@ -101,6 +188,8 @@ export interface DeploymentInfo {
   commit_sha?: string;
   url?: string;
   branch: string;
+  pr_url?: string;
+  pr_number?: number;
   status: 'deployed' | 'skipped' | 'failed' | 'pending';
   deployed_at?: string;
   error?: string;
@@ -129,6 +218,10 @@ export interface Summary {
   cost_metrics?: CostMetrics;
   auto_fix_iterations?: AutoFixIteration[];
   swarm_agents?: string[];
+  sandbox_execution?: SandboxExecution;
+  api_tests?: ApiTest[];
+  architecture_diagram?: ArchitectureDiagram;
+  benchmarks?: BenchmarkResult[];
 }
 
 export interface Template {
@@ -148,8 +241,26 @@ export interface ScheduledRunConfig {
   timezone?: string;
 }
 
+export interface ThreadMessage {
+  id: string;
+  role: 'user' | 'agent';
+  content: string;
+  run_id?: string;
+  timestamp: string;
+}
+
+export interface AgentThread {
+  id: string;
+  title: string;
+  messages: ThreadMessage[];
+  runs: AgentRun[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AgentRun {
   id: string;
+  thread_id?: string;
   inputs: CodingTask;
   generated_code: SourceFile[];
   review_report: ReviewReport;
