@@ -1,96 +1,77 @@
-import React, { useState } from 'react';
-import { AgentRun } from '../types';
+import React from 'react';
+import { AgentRun, AgentThread } from '../types';
 
-interface Props {
-  runs: AgentRun[];
-  onSelect: (run: AgentRun) => void;
-  onDelete: (id: string) => void;
-  onNew: () => void;
-  onDiff?: (a: AgentRun, b: AgentRun) => void;
+interface RunHistoryProps {
+  threads: AgentThread[];
+  onSelectRun: (run: AgentRun) => void;
+  onDiff: (a: string, b: string) => void;
+  onDeleteRun: (id: string) => void;
 }
 
-export function RunHistory({ runs, onSelect, onDelete, onNew, onDiff }: Props) {
-  const [diffMode, setDiffMode] = useState(false);
-  const [diffSelection, setDiffSelection] = useState<string[]>([]);
+export function RunHistory({ threads, onSelectRun, onDiff, onDeleteRun }: RunHistoryProps) {
+  const [filter, setFilter] = React.useState('');
+  const [diffMode, setDiffMode] = React.useState(false);
+  const [diffSelection, setDiffSelection] = React.useState<string[]>([]);
+
+  const allRuns = threads.flatMap(t => t.runs.map(r => ({ ...r, threadTitle: t.title })));
+  const filtered = filter
+    ? allRuns.filter(r => r.task_description.toLowerCase().includes(filter.toLowerCase()) || r.inputs.target_stack.toLowerCase().includes(filter.toLowerCase()))
+    : allRuns;
 
   const toggleDiff = (id: string) => {
-    setDiffSelection(prev => {
-      if (prev.includes(id)) return prev.filter(x => x !== id);
-      if (prev.length >= 2) return [prev[1], id];
-      return [...prev, id];
-    });
-  };
-
-  const startDiff = () => {
-    if (diffSelection.length !== 2 || !onDiff) return;
-    const a = runs.find(r => r.id === diffSelection[0]);
-    const b = runs.find(r => r.id === diffSelection[1]);
-    if (a && b) { onDiff(a, b); setDiffMode(false); setDiffSelection([]); }
+    if (diffSelection.includes(id)) {
+      setDiffSelection(diffSelection.filter(x => x !== id));
+    } else if (diffSelection.length < 2) {
+      setDiffSelection([...diffSelection, id]);
+    }
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">Run History ({runs.length})</h2>
+        <h2 className="text-xl font-bold">Run History ({filtered.length})</h2>
         <div className="flex gap-2">
-          {onDiff && (
-            <button className={`btn btn-sm ${diffMode ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setDiffMode(!diffMode); setDiffSelection([]); }}>
-              {diffMode ? 'Cancel Diff' : 'Diff Runs'}
-            </button>
-          )}
-          <button className="btn btn-primary btn-sm" onClick={onNew}>+ New Run</button>
+          <input className="input input-bordered input-sm" placeholder="Filter runs..." value={filter} onChange={e => setFilter(e.target.value)} />
+          <button className={`btn btn-sm ${diffMode ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setDiffMode(!diffMode); setDiffSelection([]); }}>
+            {diffMode ? 'Exit Diff' : 'Diff Mode'}
+          </button>
         </div>
       </div>
 
       {diffMode && diffSelection.length === 2 && (
-        <div className="alert alert-info text-sm flex justify-between items-center">
-          <span>Selected: {diffSelection.join(' ↔ ')}</span>
-          <button className="btn btn-sm btn-primary" onClick={startDiff}>Compare</button>
-        </div>
+        <button className="btn btn-primary btn-sm" onClick={() => onDiff(diffSelection[0], diffSelection[1])}>Compare Selected</button>
       )}
 
-      {runs.length === 0 ? (
-        <div className="card bg-base-200 shadow">
-          <div className="card-body items-center text-center">
-            <p className="opacity-70 mb-4">No runs yet. Create your first coding agent run.</p>
-            <button className="btn btn-primary" onClick={onNew}>New Run</button>
-          </div>
-        </div>
+      {filtered.length === 0 ? (
+        <div className="card bg-base-200 shadow"><div className="card-body items-center text-center"><p className="opacity-70">No runs found.</p></div></div>
       ) : (
-        <div className="space-y-2">
-          {runs.map(run => (
-            <div key={run.id} className={`card bg-base-200 shadow hover:bg-base-300 transition-colors ${diffMode && diffSelection.includes(run.id) ? 'ring-2 ring-primary' : ''}`}>
-              <div className="card-body p-4 flex flex-row items-center justify-between">
-                <div className="flex-1 cursor-pointer" onClick={() => diffMode ? toggleDiff(run.id) : onSelect(run)}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`badge badge-sm ${run.execution_results.success ? 'badge-success' : 'badge-error'}`}>
-                      {run.execution_results.success ? 'Success' : 'Failed'}
-                    </span>
-                    {run.summary.swarm_agents && <span className="badge badge-sm badge-accent">Swarm</span>}
-                    {run.summary.auto_fix_iterations && run.summary.auto_fix_iterations.length > 0 && (
-                      <span className="badge badge-sm badge-warning">Auto-fix ×{run.summary.auto_fix_iterations.length}</span>
-                    )}
-                    {run.inputs.config.template_id && (
-                      <span className="badge badge-sm badge-info">Template</span>
-                    )}
-                    <span className="text-xs opacity-50">{new Date(run.created_at).toLocaleString()}</span>
-                  </div>
-                  <p className="text-sm font-semibold truncate">{run.inputs.task_description || 'Untitled run'}</p>
-                  <div className="flex gap-3 text-xs opacity-70 mt-1">
-                    <span>{run.inputs.target_stack || 'No stack'}</span>
-                    <span>Score: {run.review_report.quality_score}</span>
-                    <span>{run.summary.files_generated} files</span>
-                    {run.summary.cost_metrics && <span>~${run.summary.cost_metrics.estimated_cost_usd.toFixed(3)}</span>}
-                  </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.slice().sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(run => (
+            <div key={run.id} className={`card bg-base-200 shadow hover:bg-base-300 transition-colors ${diffMode ? 'cursor-pointer' : ''} ${diffSelection.includes(run.id) ? 'ring-2 ring-primary' : ''}`}
+              onClick={() => diffMode ? toggleDiff(run.id) : onSelectRun(run)}>
+              <div className="card-body p-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs opacity-70">{run.id.slice(-6)}</span>
+                  <span className={`badge badge-xs ${run.review_report.overall_status === 'pass' ? 'badge-success' : run.review_report.overall_status === 'warn' ? 'badge-warning' : 'badge-error'}`}>{run.review_report.overall_status}</span>
                 </div>
-                <div className="flex gap-1 ml-4">
+                <div className="text-sm font-semibold mt-1 truncate">{run.inputs.task_description.slice(0, 60)}{run.inputs.task_description.length > 60 ? '...' : ''}</div>
+                <div className="text-xs opacity-70 mt-1">{run.inputs.target_stack}</div>
+                <div className="text-xs opacity-50 mt-1">{new Date(run.created_at).toLocaleString()} · {(run as any).threadTitle}</div>
+                <div className="flex items-center justify-between mt-2">
+                  <div className="flex gap-1 flex-wrap">
+                    {run.inputs.config.swarm_mode && <span className="badge badge-xs badge-primary">Swarm</span>}
+                    {run.inputs.config.auto_fix && <span className="badge badge-xs badge-secondary">AutoFix</span>}
+                    {run.summary.auto_fix_iterations && run.summary.auto_fix_iterations.length > 0 && <span className="badge badge-xs badge-accent">{run.summary.auto_fix_iterations.length}×</span>}
+                    {run.inputs.config.template_id && <span className="badge badge-xs badge-info">Template</span>}
+                    {run.summary.sandbox_execution && <span className="badge badge-xs badge-success">Sandbox</span>}
+                  </div>
                   {!diffMode && (
-                    <>
-                      <button className="btn btn-sm btn-ghost" onClick={() => onSelect(run)}>View</button>
-                      <button className="btn btn-sm btn-ghost text-error" onClick={() => onDelete(run.id)}>Delete</button>
-                    </>
+                    <button className="btn btn-ghost btn-xs text-error" onClick={e => { e.stopPropagation(); onDeleteRun(run.id); }}>Delete</button>
                   )}
                 </div>
+                {run.summary.cost_metrics && (
+                  <div className="text-xs opacity-50 mt-1">~${run.summary.cost_metrics.estimated_cost_usd.toFixed(3)} · {run.summary.execution_time_ms}ms</div>
+                )}
               </div>
             </div>
           ))}
